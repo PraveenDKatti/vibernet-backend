@@ -1,37 +1,40 @@
 import mongoose, { isValidObjectId } from "mongoose"
-import { User } from "../models/user.model.js"
 import { Subscription } from "../models/subscription.model.js"
+import { Video } from "../models/video.model.js"
 import { ApiError } from "../utils/ApiError.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
 
-
 const toggleSubscription = asyncHandler(async (req, res) => {
     const { channelId } = req.params
-    // TODO: toggle subscription
 
     if (!isValidObjectId(channelId)) throw new ApiError(400, "invalid channel id")
 
-    const subscription = await Subscription.findOne({ subscriber: req.user.id, channel: new mongoose.Types.ObjectId(channelId) })
+    // Use _id for consistency
+    const subscription = await Subscription.findOne({ 
+        subscriber: req.user?._id, 
+        channel: channelId 
+    })
 
     if (subscription) {
         await Subscription.findByIdAndDelete(subscription._id)
         return res
             .status(200)
-            .json(200, { subscribed: false }, "subscription toggled successfully")
+            .json(new ApiResponse(200, { subscribed: false }, "subscription removed"))
     }
 
-    await Subscription.create({ subscriber: req.user.id, channel: new mongoose.Types.ObjectId(channelId) })
+    await Subscription.create({ 
+        subscriber: req.user?._id, 
+        channel: channelId 
+    })
 
     return res
         .status(200)
-        .json(200, { subscribed: true }, "subscription toggled successfully")
+        .json(new ApiResponse(200, { subscribed: true }, "subscription added"))
 })
 
-// controller to return subscriber list of a channel
 const getUserChannelSubscribers = asyncHandler(async (req, res) => {
     const { channelId } = req.params
-
     if (!isValidObjectId(channelId)) throw new ApiError(400, "invalid channel id")
 
     const channelSubscribers = await Subscription.aggregate([
@@ -52,13 +55,10 @@ const getUserChannelSubscribers = asyncHandler(async (req, res) => {
     return res
         .status(200)
         .json(new ApiResponse(200, channelSubscribers, "subscribers fetched successfully."))
-
 })
 
-// controller to return channel list to which user has subscribed
 const getSubscribedChannels = asyncHandler(async (req, res) => {
     const { subscriberId } = req.params
-
     if (!isValidObjectId(subscriberId)) throw new ApiError(400, "invalid subscriber id")
 
     const subscribedChannels = await Subscription.aggregate([
@@ -79,41 +79,39 @@ const getSubscribedChannels = asyncHandler(async (req, res) => {
     return res
         .status(200)
         .json(new ApiResponse(200, subscribedChannels, "fetched user subscribed channels successfully"))
-
 })
 
-const getAllSubscribedVideos = asyncHandler(async (req, res) => {
-    const userId = req.user?._id;
+const getSubscribedFeed = asyncHandler(async (req, res) => {
+    const { page = 1, limit = 10 } = req.query;
 
-    const videos = await Subscription.aggregate([
-        { $match: { subscriber: new mongoose.Types.ObjectId(userId) } },
+    const aggregate = Subscription.aggregate([
+        { $match: { subscriber: new mongoose.Types.ObjectId(req.user?._id) } },
         {
             $lookup: {
                 from: "videos",
                 localField: "channel",
                 foreignField: "owner",
-                as: "videos"
+                as: "videos",
+                pipeline: [
+                    { $match: { isPublished: true } },
+                    { $project: { videoFile: 1, thumbnail: 1, title: 1, duration: 1, views: 1, owner: 1 } }
+                ]
             }
         },
         { $unwind: "$videos" },
-        {
-            $project: {
-                _id: "$videos._id",
-                title: "$videos.title",
-                thumbnail: "$videos.thumbnail",
-                createdAt: "$videos.createdAt"
-            }
-        }
+        { $replaceRoot: { newRoot: "$videos" } },
+        { $sort: { createdAt: -1 } }
     ]);
 
-    return res.status(200).json(
-        new ApiResponse(200, videos, "Feed fetched successfully")
-    )
-})
+    // Using the aggregatePaginate plugin correctly here
+    const feed = await Video.aggregatePaginate(aggregate, { page, limit });
 
+    return res.status(200).json(new ApiResponse(200, feed, "Feed fetched successfully"));
+});
 
 export {
     toggleSubscription,
     getUserChannelSubscribers,
-    getSubscribedChannels
+    getSubscribedChannels,
+    getSubscribedFeed
 }
