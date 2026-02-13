@@ -12,13 +12,13 @@ const toggleSubscription = asyncHandler(async (req, res) => {
 
     if (!isValidObjectId(channelId)) throw new ApiError(400, "invalid channel id")
 
-    const subscription = await Subscription.findOne({ subscriber: req.user.id, channel: new mongoose.Types.ObjectId(channelId)})
+    const subscription = await Subscription.findOne({ subscriber: req.user.id, channel: new mongoose.Types.ObjectId(channelId) })
 
     if (subscription) {
-        await Subscription.findByIdAndDelete(subscription._id)        
+        await Subscription.findByIdAndDelete(subscription._id)
         return res
-        .status(200)
-        .json(200, { subscribed: false}, "subscription toggled successfully")
+            .status(200)
+            .json(200, { subscribed: false }, "subscription toggled successfully")
     }
 
     await Subscription.create({ subscriber: req.user.id, channel: new mongoose.Types.ObjectId(channelId) })
@@ -42,10 +42,10 @@ const getUserChannelSubscribers = asyncHandler(async (req, res) => {
                 localField: "subscriber",
                 foreignField: "_id",
                 as: "subscriber",
-                pipeline: [ { $project: { username: 1, fullName: 1, avatar: 1} } ]
+                pipeline: [{ $project: { username: 1, fullName: 1, avatar: 1 } }]
             }
         },
-        { $unwind:"$subscriber" },
+        { $unwind: "$subscriber" },
         { $project: { subscriber: 1, createdAt: 1 } }
     ])
 
@@ -62,25 +62,55 @@ const getSubscribedChannels = asyncHandler(async (req, res) => {
     if (!isValidObjectId(subscriberId)) throw new ApiError(400, "invalid subscriber id")
 
     const subscribedChannels = await Subscription.aggregate([
-        { $match:{ subscriber: new mongoose.Types.ObjectId(subscriberId) } },
+        { $match: { subscriber: new mongoose.Types.ObjectId(subscriberId) } },
         {
-            $lookup:{
+            $lookup: {
                 from: "users",
                 localField: "channel",
                 foreignField: "_id",
                 as: "subscribedChannel",
-                pipeline:[{ $project:{ username: 1, fullName:1, avatar: 1} } ]
+                pipeline: [{ $project: { username: 1, fullName: 1, avatar: 1 } }]
             }
         },
         { $unwind: "$subscribedChannel" },
-        { $project: { subscribedChannel:1, createdAt: 1 } }
+        { $project: { subscribedChannel: 1, createdAt: 1 } }
     ])
 
     return res
-    .status(200)
-    .json(new ApiResponse(200, subscribedChannels, "fetched user subscribed channels successfully"))
+        .status(200)
+        .json(new ApiResponse(200, subscribedChannels, "fetched user subscribed channels successfully"))
 
 })
+
+const getAllSubscribedVideos = asyncHandler(async (req, res) => {
+    const userId = req.user?._id;
+
+    const videos = await Subscription.aggregate([
+        { $match: { subscriber: new mongoose.Types.ObjectId(userId) } },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "channel",
+                foreignField: "owner",
+                as: "videos"
+            }
+        },
+        { $unwind: "$videos" },
+        {
+            $project: {
+                _id: "$videos._id",
+                title: "$videos.title",
+                thumbnail: "$videos.thumbnail",
+                createdAt: "$videos.createdAt"
+            }
+        }
+    ]);
+
+    return res.status(200).json(
+        new ApiResponse(200, videos, "Feed fetched successfully")
+    )
+})
+
 
 export {
     toggleSubscription,
