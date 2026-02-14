@@ -11,9 +11,9 @@ const toggleSubscription = asyncHandler(async (req, res) => {
     if (!isValidObjectId(channelId)) throw new ApiError(400, "invalid channel id")
 
     // Use _id for consistency
-    const subscription = await Subscription.findOne({ 
-        subscriber: req.user?._id, 
-        channel: channelId 
+    const subscription = await Subscription.findOne({
+        subscriber: req.user?._id,
+        channel: channelId
     })
 
     if (subscription) {
@@ -23,9 +23,9 @@ const toggleSubscription = asyncHandler(async (req, res) => {
             .json(new ApiResponse(200, { subscribed: false }, "subscription removed"))
     }
 
-    await Subscription.create({ 
-        subscriber: req.user?._id, 
-        channel: channelId 
+    await Subscription.create({
+        subscriber: req.user?._id,
+        channel: channelId
     })
 
     return res
@@ -68,12 +68,33 @@ const getSubscribedChannels = asyncHandler(async (req, res) => {
                 from: "users",
                 localField: "channel",
                 foreignField: "_id",
-                as: "subscribedChannel",
+                as: "channelDetails",
                 pipeline: [{ $project: { username: 1, fullName: 1, avatar: 1 } }]
             }
         },
-        { $unwind: "$subscribedChannel" },
-        { $project: { subscribedChannel: 1, createdAt: 1 } }
+        { $unwind: "$channelDetails" },
+
+        // 3. LOOKUP: Count how many people follow THIS specific channel
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "channel", // The ID of the channel we are looking at
+                foreignField: "channel", // Look for this ID in the 'channel' field of other subscription docs
+                as: "allSubscribers"
+            }
+        },
+        {
+            $addFields: {
+                subscriberCount: { $size: { $subcribers } }
+            }
+        },
+        {
+            $project: {
+                channelDetails: 1,
+                subscriberCount: 1,
+                createdAt: 1
+            }
+        }
     ])
 
     return res
@@ -92,14 +113,21 @@ const getSubscribedFeed = asyncHandler(async (req, res) => {
                 localField: "channel",
                 foreignField: "owner",
                 as: "videos",
-                pipeline: [
-                    { $match: { isPublished: true } },
-                    { $project: { videoFile: 1, thumbnail: 1, title: 1, duration: 1, views: 1, owner: 1 } }
-                ]
+                pipeline: [{ $match: { isPublished: true } }],
             }
         },
         { $unwind: "$videos" },
-        { $replaceRoot: { newRoot: "$videos" } },
+        { $replaceRoot: { newRoot: "$video" } },
+        {
+            $lookup:{
+                from: 'users',
+                localField: 'owner',
+                foreignField: '_id',
+                as: 'ownerDetails',
+                pipeline: [{ $project: { username: 1, fullName: 1, avatar: 1 } }]
+            }
+        },
+        { $unwind: "$ownerDetails" },
         { $sort: { createdAt: -1 } }
     ]);
 
