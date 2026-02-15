@@ -447,6 +447,9 @@ const getWatchHistory = asyncHandler(async(req,res)=>{
                     }
                 ]
             }
+        },
+        {
+            $unwind: "$watchHistory"
         }
     ])
 
