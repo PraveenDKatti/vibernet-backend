@@ -4,50 +4,76 @@ import bcrypt from "bcrypt";
 
 
 const userSchema = new Schema(
-    {
-        username: {
-            type: String,
-            required: true,
-            unique: true,
-            lowercase: true,
-            trim: true,
-            index: true
-        },
-        email: {
-            type: String,
-            required: true,
-            unique: true,
-            lowercase: true,
-            trim: true,
-        },
-        fullName: {
-            type: String,
-            required: true,
-            trim: true,
-            index: true
-        },
-        avatar: {
-            type: String,
-            required: true,
-        },
-        coverImage: {
-            type: String,
-        },
-        watchHistory: [{
-            type: Schema.Types.ObjectId,
-            ref: "Video"
-        }],
-        password: {
-            type: String,
-            required: [true, "Password is required"]
-        },
-        refreshToken: {
-            type: String
-        }
-    }, { timestamps: true }
-)
+  {
+    username: { 
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      index: true
+    },
 
-userSchema.pre("save", async function (next) {
+    email: { // Private login email
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      select: false // Automatically excludes from "Find" queries for security
+    },
+
+    contactEmail: { // Public business email
+      type: String,
+      lowercase: true,
+      trim: true,
+      default: ""
+    },
+
+    fullName: {
+      type: String,
+      required: true,
+      trim: true,
+      index: true
+    },
+
+    description: {
+      type: String,
+      trim: true,
+      maxlength: 1000
+    },
+
+    avatar: {
+      type: String,
+      required: true
+    },
+
+    coverImage: {
+      type: String
+    },
+
+    links: [
+      {
+        title: { type: String, trim: true },
+        url: { type: String, trim: true }
+      }
+    ],
+
+    password: {
+      type: String,
+      required: [true, "Password is required"]
+    },
+
+    refreshToken: {
+      type: String
+    }
+  },
+  { 
+    timestamps: true 
+  }
+);
+
+userSchema.pre("save", async function () {
     if (!this.isModified("password")) return
 
     this.password = await bcrypt.hash(this.password, 10)

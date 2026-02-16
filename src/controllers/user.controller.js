@@ -4,7 +4,6 @@ import { User } from "../models/user.model.js"
 import { uploadOnCloudinary } from "../utils/cloudinary.js"
 import { ApiResponse  } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken"
-import mongoose from "mongoose";
 
 
 const generateAccessAndRefreshTokens = async (userId)=>{
@@ -25,76 +24,50 @@ const generateAccessAndRefreshTokens = async (userId)=>{
 }
 
 
-const registerUser = asyncHandler(async(req,res)=>{
-    //get user details from frontend
-    //validation -not empty
-    //check if user already exists: username, email
-    //check for images, check for avatar
-    //upload them to cloudinary, avatar
-    //create user object -create entry in db
-    //remove password and refresh token field from response
-    //check for user creation
-    //return res
+const registerUser = asyncHandler(async (req, res) => {
 
-
-    const {fullName, email, username, password} = req.body
+    const { fullName, email, username, password } = req.body;
 
     if (
-        [fullName,email,username,password].some((field) => field?.trim()==="")
+        [fullName, email, username, password].some((field) => field?.trim() === "")
     ) {
-       throw new ApiError(400, "All fieldsa are required.") 
+        throw new ApiError(400, "All fields are required.");
     }
 
     const existedUser = await User.findOne({
         $or: [{ username }, { email }]
-    })
-
-    if(existedUser){
-        throw new ApiError(409, "User with email or username already exists")
+    });
+    if (existedUser) {
+        throw new ApiError(409, "User with email or username already exists");
     }
 
-    const avatarLocalPath = req.files?.avatar[0]?.path
-    //const coverImageLocalPath = req.files?.coverImage[0]?.path
-
-    let coverImageLocalPath;
-
-    if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length>0){
-        coverImageLocalPath = req.files.coverImage[0].path
+    const avatarLocalPath = req.files?.avatar?.[0]?.path;
+    if (!avatarLocalPath) {
+        throw new ApiError(400, "Avatar file is required.");
     }
-
-    if(!avatarLocalPath){
-        throw new ApiError(400,"Avatar file is required.")
-    }
-
-    const avatar = await uploadOnCloudinary(avatarLocalPath)
-    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
-
-    if(!avatar){
-        throw new ApiError(400,"Avatar file is required.")
+    const avatar = await uploadOnCloudinary(avatarLocalPath);
+    if (!avatar) {
+        throw new ApiError(400, "Failed to upload avatar to Cloudinary.");
     }
 
     const user = await User.create({
         fullName,
         avatar: avatar.url,
-        coverImage: coverImage?.url || "",
         email,
         password,
         username: username.toLowerCase()
-    })
+    });
 
-    const createdUser =  await User.findById(user._id).select(
-        "-password -refreshToken"
-    )
+    const createdUser = await User.findById(user._id);
 
-    if(!createdUser){
-        throw new ApiError(500,"something went wrong while registering the user.")
+    if (!createdUser) {
+        throw new ApiError(500, "Something went wrong while registering the user.");
     }
 
     return res.status(201).json(
-        new ApiResponse(200, createdUser, "User registered successfully.")
-    )
-    
-})
+        new ApiResponse(201, createdUser, "User registered successfully.")
+    );
+});
 
 
 const loginUser = asyncHandler(async (req,res) => {
@@ -255,86 +228,86 @@ const getCurrentUser = asyncHandler(async (req,res) => {
 })
 
 
-const updateAccountDetails = asyncHandler(async (req,res) => {
-    const {fullName, email} = req.body
+const updateAccountDetails = asyncHandler(async (req, res) => {
+    const { fullName, description, contactEmail, links } = req.body;
 
-    if(!(fullName || email)){
-        throw new ApiError(400, "All fields are required")
+    // Only fullName is strictly required by the Schema
+    if (!fullName?.trim()) {
+        throw new ApiError(400, "Full Name is required");
     }
 
     const user = await User.findByIdAndUpdate(
         req.user?._id,
         {
-            $set:{
+            $set: {
                 fullName,
-                email,
+                description,
+                contactEmail,
+                links 
             }
         },
-        {new: true}
-    ).select("-password -refreshToken")
+        { new: true }
+    ).select("-password -refreshToken");
 
     return res
-    .status(200)
-    .json(new ApiResponse(200, user, "Account details updated successfully"))
-})
+        .status(200)
+        .json(new ApiResponse(200, user, "Account details updated successfully"));
+});
 
 
-const updateUserAvatar = asyncHandler(async(req,res)=>{
-    const avatarLocalPath = req.file?.path
+const updateUserAvatar = asyncHandler(async (req, res) => {
+    const avatarLocalPath = req.file?.path;
 
-    if(!avatarLocalPath){
-        throw new ApiError(400, "Avatar file is missing")
+    if (!avatarLocalPath) {
+        throw new ApiError(400, "Avatar file is missing");
     }
 
-    const avatar = await uploadOnCloudinary(avatarLocalPath)
+    const avatar = await uploadOnCloudinary(avatarLocalPath);
 
-    if(!avatar.url){
-        throw new ApiError(400, "Error while uploading image")
+    // Use ?. to prevent crashing if Cloudinary returns null
+    if (!avatar?.url) {
+        throw new ApiError(400, "Error while uploading avatar");
     }
 
     const user = await User.findByIdAndUpdate(
         req.user?._id,
         {
-            $set:{
-                avatar:avatar.url
-            }
+            $set: { avatar: avatar.url }
         },
-        {new:true}
-    ).select("-password -refreshToken")
-    
+        { new: true }
+    ).select("-password -refreshToken");
+
     return res
-    .status(200)
-    .json(200,user,new ApiResponse("Updated avatar"))
-})
+        .status(200)
+        .json(new ApiResponse(200, user, "Avatar updated successfully"));
+});
 
 
-const updateUserCoverImage = asyncHandler(async(req,res)=>{
-    const coverImageLocalPath = req.file?.path
+const updateUserCoverImage = asyncHandler(async (req, res) => {
+    const coverImageLocalPath = req.file?.path;
 
-    if(!coverImageLocalPath){
-        throw new ApiError(400, "coverImage file is missing")
+    if (!coverImageLocalPath) {
+        throw new ApiError(400, "Cover image file is missing");
     }
 
-    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
-    if(!coverImage.url){
-        throw new ApiError(400, "Error while uploading image")
+    if (!coverImage?.url) {
+        throw new ApiError(400, "Error while uploading cover image");
     }
 
     const user = await User.findByIdAndUpdate(
         req.user?._id,
         {
-            $set:{
-                coverImage:coverImage.url
-            }
+            $set: { coverImage: coverImage.url }
         },
-        {new:true}
-    ).select("-password")
-    
+        { new: true }
+    ).select("-password -refreshToken");
+
     return res
-    .status(200)
-    .json(200,user,new ApiResponse("Updated coverImage"))
-})
+        .status(200)
+        .json(new ApiResponse(200, user, "Cover image updated successfully"));
+});
 
 const getUserChannelProfile = asyncHandler(async(req,res)=>{
     const {username} = req.params
@@ -407,63 +380,6 @@ const getUserChannelProfile = asyncHandler(async(req,res)=>{
 })
 
 
-const getWatchHistory = asyncHandler(async(req,res)=>{
-    const user = await User.aggregate([
-        {
-            $match:{
-                _id: new mongoose.Types.ObjectId(req.user._id)
-            }
-        },
-        {
-            $lookup:{
-                from: "videos",
-                localField: "watchHistory",
-                foreignField: "_id",
-                as: "watchHistory",
-                pipeline:[
-                    {
-                        $lookup:{
-                            from: "users",
-                            localField: "owner",
-                            foreignField: "_id",
-                            as: "owner",
-                            pipeline:[
-                                {
-                                    $project:{
-                                        fullName: 1,
-                                        username: 1,
-                                        avatar: 1,
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        $addFields:{
-                            owner:{
-                                $first: "$owner"
-                            }
-                        }
-                    }
-                ]
-            }
-        },
-        {
-            $unwind: "$watchHistory"
-        }
-    ])
-
-    return res
-    .status(200)
-    .json(new ApiResponse(
-        200,
-        user[0].getWatchHistory,
-        "watch history fetched successfully"
-    ))
-})
-
-
-
 export { 
     registerUser,
     loginUser,
@@ -475,6 +391,5 @@ export {
     updateUserAvatar,
     updateUserCoverImage,
     getUserChannelProfile,
-    getWatchHistory
 }
 
