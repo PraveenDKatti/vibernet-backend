@@ -27,6 +27,8 @@ import communityRouter from "./routes/community.routes.js"
 import likeRouter from "./routes/like.routes.js"
 import dashboardRouter from "./routes/like.routes.js"
 import healthcheckRouter from "./routes/like.routes.js"
+import hitoryRouter from "./routes/history.routes.js";
+import watchlaterRouter from "./routes/watchlater.routes.js";
 
 //routes declaration
 app.use("/api/v1/users", userRouter)
@@ -38,6 +40,9 @@ app.use("/api/v1/likes", likeRouter)
 app.use("/api/v1/community", communityRouter)
 app.use("/api/v1/dashboard", dashboardRouter)
 app.use("/api/v1/healthcheck", healthcheckRouter)
+app.use("/api/v1/history", hitoryRouter);
+app.use("/api/v1/watchlater", watchlaterRouter);
+
 
 //global error handler
 app.use(errorHandler);
