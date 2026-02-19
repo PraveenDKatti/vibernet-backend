@@ -5,7 +5,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 
-//Create Post
+
 const createPost = asyncHandler(async (req, res) => {
     const { content } = req.body;
     
@@ -23,12 +23,12 @@ const createPost = asyncHandler(async (req, res) => {
         content,
         image: image?.url || "",
         owner: req.user._id
+        // likesCount, dislikesCount, commentsCount default to 0 automatically
     });
 
     return res.status(201).json(new ApiResponse(201, post, "Post created successfully"));
 });
 
-//Get Channel Posts
 const getChannelPosts = asyncHandler(async (req, res) => {
     const { userId } = req.params;
     if (!isValidObjectId(userId)) throw new ApiError(400, "Invalid Channel ID");
@@ -36,24 +36,45 @@ const getChannelPosts = asyncHandler(async (req, res) => {
     const posts = await Community.aggregate([
         { $match: { owner: new mongoose.Types.ObjectId(userId) } },
         {
+            // only lookup the specific user's interaction status
             $lookup: {
                 from: "likes",
-                localField: "_id",
-                foreignField: "community",
-                as: "likes"
+                let: { postId: "$_id" },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $and: [
+                                    { $eq: ["$post", "$$postId"] },
+                                    { $eq: ["$likedBy", new mongoose.Types.ObjectId(req.user?._id)] }
+                                ]
+                            }
+                        }
+                    }
+                ],
+                as: "userInteraction"
             }
         },
         {
             $addFields: {
-                likesCount: { $size: "$likes" },
                 isLiked: {
                     $cond: {
-                        if: { $in: [req.user?._id, "$likes.likedBy"] },
+                        if: { $eq: [{ $first: "$userInteraction.type" }, "like"] },
+                        then: true,
+                        else: false
+                    }
+                },
+                isDisliked: {
+                    $cond: {
+                        if: { $eq: [{ $first: "$userInteraction.type" }, "dislike"] },
                         then: true,
                         else: false
                     }
                 }
             }
+        },
+        {
+            $project: { userInteraction: 0 }
         },
         { $sort: { createdAt: -1 } }
     ]);
@@ -61,7 +82,6 @@ const getChannelPosts = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, posts, "Posts fetched successfully"));
 });
 
-//Update Post
 const updatePost = asyncHandler(async (req, res) => {
     const { postId } = req.params;
     const { content } = req.body;
@@ -85,10 +105,6 @@ const updatePost = asyncHandler(async (req, res) => {
         updateData.image = image.url;
     }
 
-    if (Object.keys(updateData).length === 0) {
-        throw new ApiError(400, "Nothing to update");
-    }
-
     const updatedPost = await Community.findByIdAndUpdate(
         postId,
         { $set: updateData },
@@ -98,7 +114,6 @@ const updatePost = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, updatedPost, "Post updated"));
 });
 
-// --- 4. Delete Post ---
 const deletePost = asyncHandler(async (req, res) => {
     const { postId } = req.params;
     if (!isValidObjectId(postId)) throw new ApiError(400, "Invalid Post Id");
@@ -110,14 +125,13 @@ const deletePost = asyncHandler(async (req, res) => {
         throw new ApiError(403, "Unauthorized access");
     }
 
-    await Community.findByIdAndDelete(postId);
+    await Promise.all([
+        Community.findByIdAndDelete(postId),
+        Like.deleteMany({ post: postId }),
+        Comment.deleteMany({ post: postId })
+    ]);
 
-    return res.status(200).json(new ApiResponse(200, {}, "Post deleted"));
+    return res.status(200).json(new ApiResponse(200, {}, "Post and all associated interactions deleted"));
 });
 
-export { 
-    createPost, 
-    getChannelPosts, 
-    updatePost, 
-    deletePost 
-};
+export { createPost, getChannelPosts, updatePost, deletePost };

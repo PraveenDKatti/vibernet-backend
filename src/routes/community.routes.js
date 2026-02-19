@@ -9,11 +9,12 @@ import {
 } from "../controllers/community.controller.js";
 
 const router = Router();
+router.route("/user/:userId").get(getChannelPosts);
 router.use(verifyJWT);
 
 router.route("/").post(upload.single("image"), createPost);
-router.route("/user/:userId").get(getChannelPosts);
-router.route("/:postId").patch(upload.single("image"), updatePost)
-router.route("/:postId").delete(deletePost);
+router.route("/:postId")
+    .patch(upload.single("image"), updatePost)
+    .delete(deletePost);
 
 export default router;

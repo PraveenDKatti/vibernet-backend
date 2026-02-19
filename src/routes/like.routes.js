@@ -2,15 +2,14 @@ import { Router } from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js"
 import { 
     getLikedVideos, 
-    toggleCommentLike, 
-    toggleVideoLike 
+    toggleReaction // The universal controller
 } from "../controllers/like.controller.js";
 
 const router = Router()
+
 router.use(verifyJWT)
 
-router.route("/toggle/v/:videoId").post(toggleVideoLike)
-router.route("/toggle/c/:commentId").post(toggleCommentLike)
-router.route("/videos/").get(getLikedVideos)
+router.route("/toggle/:targetId").post(toggleReaction)
+router.route("/videos").get(getLikedVideos)
 
 export default router
