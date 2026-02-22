@@ -2,98 +2,70 @@ import mongoose, { isValidObjectId } from "mongoose"
 import { Like } from "../models/like.model.js"
 import { Video } from "../models/video.model.js"
 import { Comment } from "../models/comment.model.js"
-import { Community } from "../models/community.model.js"
+import { Post } from "../models/post.model.js"
 import { ApiError } from "../utils/ApiError.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
 
+
 const toggleReaction = asyncHandler(async (req, res) => {
     const { targetId } = req.params;
-    const { type } = req.query; // "like" or "dislike"
+    const { type, targetType } = req.query; // targetType: "video", "comment", or "post"
     const userId = req.user._id;
 
-    if (!isValidObjectId(targetId)) throw new ApiError(400, "Invalid ID");
-    if (!["like", "dislike"].includes(type)) throw new ApiError(400, "Invalid reaction type");
+    // 1. Find if a reaction already exists
+    const existingReaction = await Like.findOne({
+        likedBy: userId,
+        targetId: targetId
+    });
 
-    // 1. Identify the Target Model (Video, Comment, or Post)
-    // Professional Tip: We check which field is present in the Like Schema
-    let TargetModel;
-    let targetField;
+    // 2. Identify which model to update manual counters for
+    const models = { video: Video, comment: Comment, post: Post };
+    const TargetModel = models[targetType];
 
-    // Check Video
-    const isVideo = await Video.exists({ _id: targetId });
-    if (isVideo) {
-        TargetModel = Video;
-        targetField = "video";
-    } else {
-        const isComment = await Comment.exists({ _id: targetId });
-        if (isComment) {
-            TargetModel = Comment;
-            targetField = "comment";
+    if (!TargetModel) throw new ApiError(400, "Invalid target type");
+
+    if (existingReaction) {
+        if (existingReaction.type === type) {
+            // UNDO: Delete reaction and decrement counter
+            await Like.findByIdAndDelete(existingReaction._id);
+            await TargetModel.findByIdAndUpdate(targetId, {
+                $inc: { [type === "like" ? "likesCount" : "dislikesCount"]: -1 }
+            });
+            return res.status(200).json(new ApiResponse(200, { status: null }, "Removed"));
         } else {
-            const isPost = await Community.exists({ _id: targetId });
-            if (isPost) {
-                TargetModel = Community;
-                targetField = "post";
-            }
+            // SWITCH: Update type and swap counters
+            const oldType = existingReaction.type;
+            existingReaction.type = type;
+            await existingReaction.save();
+
+            await TargetModel.findByIdAndUpdate(targetId, {
+                $inc: {
+                    [type === "like" ? "likesCount" : "dislikesCount"]: 1,
+                    [oldType === "like" ? "likesCount" : "dislikesCount"]: -1
+                }
+            });
+            return res.status(200).json(new ApiResponse(200, { status: type }, "Switched"));
         }
     }
 
-    if (!TargetModel) throw new ApiError(404, "Target not found");
-
-    // 2. Check if reaction already exists
-    const existingReaction = await Like.findOne({ 
-        likedBy: userId, 
-        [targetField]: targetId 
+    // NEW: Create reaction and increment counter
+    await Like.create({ likedBy: userId, targetId, targetType, type });
+    await TargetModel.findByIdAndUpdate(targetId, {
+        $inc: { [type === "like" ? "likesCount" : "dislikesCount"]: 1 }
     });
 
-    // --- CASE 1: Removing the same reaction (Toggling OFF) ---
-    if (existingReaction && existingReaction.type === type) {
-        await Like.findByIdAndDelete(existingReaction._id);
-        
-        const counterField = type === "like" ? "likesCount" : "dislikesCount";
-        await TargetModel.findByIdAndUpdate(targetId, { $inc: { [counterField]: -1 } });
-
-        return res.status(200).json(new ApiResponse(200, { status: null }, "Reaction removed"));
-    }
-
-    // --- CASE 2: Switching reaction (Like to Dislike or vice-versa) ---
-    if (existingReaction && existingReaction.type !== type) {
-        existingReaction.type = type;
-        await existingReaction.save();
-
-        const decField = type === "like" ? "dislikesCount" : "likesCount";
-        const incField = type === "like" ? "likesCount" : "dislikesCount";
-
-        await TargetModel.findByIdAndUpdate(targetId, { 
-            $inc: { [decField]: -1, [incField]: 1 } 
-        });
-
-        return res.status(200).json(new ApiResponse(200, { status: type }, `Switched to ${type}`));
-    }
-
-    // --- CASE 3: New Reaction (Toggling ON) ---
-    await Like.create({
-        likedBy: userId,
-        [targetField]: targetId,
-        type
-    });
-
-    const incField = type === "like" ? "likesCount" : "dislikesCount";
-    await TargetModel.findByIdAndUpdate(targetId, { $inc: { [incField]: 1 } });
-
-    return res.status(200).json(new ApiResponse(200, { status: type }, `Added ${type}`));
+    return res.status(200).json(new ApiResponse(200, { status: type }, "Success"));
 });
-
 
 const getLikedVideos = asyncHandler(async (req, res) => {
     const likedVideos = await Like.aggregate([
-        { 
-            $match: { 
+        {
+            $match: {
                 likedBy: new mongoose.Types.ObjectId(req.user._id),
                 video: { $exists: true },
                 type: "like"
-            } 
+            }
         },
         {
             $lookup: {
@@ -120,7 +92,7 @@ const getLikedVideos = asyncHandler(async (req, res) => {
     ]);
 
     return res.status(200).json(new ApiResponse(200, likedVideos, "Fetched liked videos"));
-});
+})
 
 export {
     toggleReaction,

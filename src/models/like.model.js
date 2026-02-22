@@ -1,25 +1,37 @@
-import mongoose, {Schema} from "mongoose";
+import mongoose, { Schema } from "mongoose";
 
 const likeSchema = new Schema(
-    {
-        video: { type: Schema.Types.ObjectId, ref: "Video" },
-        comment: { type: Schema.Types.ObjectId, ref: "Comment" },
-        post: { type: Schema.Types.ObjectId, ref: "Community" },
-        likedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
-
-        // The "Type" field distinguishes between Like and Dislike
-        type: {
-            type: String,
-            enum: ["like", "dislike"],
-            required: true
-        }
+  {
+    type: {
+      type: String,
+      enum: ["like", "dislike"],
+      required: true,
     },
-    { timestamps: true }
+    likedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    // The "Polymorphic" fields
+    targetId: {
+      type: Schema.Types.ObjectId,
+      required: true,
+      // This tells Mongoose to look at 'targetType' to know which model to populate from
+      refPath: "targetType", 
+    },
+    targetType: {
+      type: String,
+      required: true,
+      lowercase: true,
+      enum: ["video", "comment", "post"], // Strict list of what can be liked
+    },
+  },
+  { timestamps: true }
 );
 
-// Updated indexes with sparse property
-likeSchema.index({ video: 1, likedBy: 1 }, { unique: true, sparse: true });
-likeSchema.index({ comment: 1, likedBy: 1 }, { unique: true, sparse: true });
-likeSchema.index({ post: 1, likedBy: 1 }, { unique: true, sparse: true });
+// THE POWER OF THIS SCHEMA:
+// One single compound index handles EVERYTHING.
+// It ensures a user can only have ONE reaction (like or dislike) per item.
+likeSchema.index({ likedBy: 1, targetId: 1 }, { unique: true });
 
 export const Like = mongoose.model("Like", likeSchema);

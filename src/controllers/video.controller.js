@@ -3,16 +3,27 @@ import { User } from "../models/user.model.js"
 import { ApiError } from "../utils/ApiError.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
 import { Video } from "../models/video.model.js"
+import { Comment } from '../models/comment.model.js'
 import { Like } from "../models/like.model.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import { uploadOnCloudinary } from "../utils/cloudinary.js"
 
 const getAllVideos = asyncHandler(async (req, res) => {
-    const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
+    const { page = 1, limit = 10, query, sortBy, sortType, username } = req.query;
     const pageNumber = Number(page);
     const limitNumber = Number(limit);
 
     const pipeline = [];
+
+    const userId = ""
+    if (username) {
+        const user = await User.findOne({ username })
+        if (!user) {
+            throw new ApiError(404, "Channel/User not found");
+        } else {
+            userId = user._id
+        }
+    }
 
     if (query) {
         pipeline.push({
@@ -90,56 +101,39 @@ const publishAVideo = asyncHandler(async (req, res) => {
 })
 
 const getVideoById = asyncHandler(async (req, res) => {
-    //TODO: get video by id]]
-    const { videoId } = req.params
-
-    if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid videoId")
+    const { videoId } = req.params;
+    if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid ID");
 
     const video = await Video.aggregate([
         { $match: { _id: new mongoose.Types.ObjectId(videoId) } },
         {
             $lookup: {
-                from: "users",
-                localField: "owner",
-                foreignField: "_id",
-                as: "owner",
-                pipeline: [{ $project: { username: 1, avatar: 1, fullname: 1 } }]
-            }
-        },
-        {
-            $lookup: {
                 from: "likes",
-                localField: "_id",
-                foreignField: "video",
-                as: "likes"
+                let: { vId: "$_id" },
+                pipeline: [
+                    { $match: { 
+                        $expr: { 
+                            $and: [
+                                { $eq: ["$targetId", "$$vId"] },
+                                { $eq: ["$likedBy", new mongoose.Types.ObjectId(req.user?._id)] }
+                            ]
+                        }
+                    }}
+                ],
+                as: "userInteraction"
             }
         },
         {
             $addFields: {
-                likesCount: { $size: "$likes" },
-                owner: { $first: "$owner" },
-                isLiked: {
-                    $cond: {
-                        if: {
-                            $and: [
-                                { $gt: [{ $size: "$userInteraction" }, 0] },
-                                { $eq: [{ $first: "$userInteraction.type" }, "like"] }
-                            ]
-                        },
-                        then: true,
-                        else: false
-                    }
-                }
+                // We don't count here! We just read the stored numbers
+                isLiked: { $eq: [{ $first: "$userInteraction.type" }, "like"] },
+                isDisliked: { $eq: [{ $first: "$userInteraction.type" }, "dislike"] }
             }
         }
-    ])
+    ]);
 
-    if (!video.length) throw new ApiError(404, "video not found")
-
-    return res
-        .status(200)
-        .json(new ApiResponse(200, video[0], "video fetched successfully"))
-})
+    return res.status(200).json(new ApiResponse(200, video[0], "Success"));
+});
 
 const updateVideo = asyncHandler(async (req, res) => {
     //TODO: update video details like title, description, thumbnail
@@ -191,18 +185,14 @@ const deleteVideo = asyncHandler(async (req, res) => {
     await Video.findByIdAndDelete(videoId);
 
     await Promise.all([
-        Comment.deleteMany({ video: videoId }),
-        Like.deleteMany({ video: videoId })
+        Comment.deleteMany({ video: videoId }), // Remove all comments
+        Like.deleteMany({ targetId: videoId, targetType: "video" }) // Remove video likes
     ]);
-
-    // 3. Optional: Delete files from Cloudinary here as well
-    // await deleteFromCloudinary(video.videoFile, "video")
-    // await deleteFromCloudinary(video.thumbnail, "image")
 
     return res
         .status(200)
-        .json(new ApiResponse(200, {}, "Video and associated data deleted successfully"));
-});
+        .json(new ApiResponse(200, {}, "Video deleted successfully"));
+})
 
 const togglePublishStatus = asyncHandler(async (req, res) => {
     const { videoId } = req.params

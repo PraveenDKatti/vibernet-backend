@@ -1,49 +1,72 @@
 import mongoose, { isValidObjectId } from "mongoose"
 import { Comment } from "../models/comment.model.js"
 import { Video } from "../models/video.model.js"
-import { Community } from "../models/community.model.js"
+import { Post } from "../models/post.model.js"
 import { ApiError } from "../utils/ApiError.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
 
 const addComment = asyncHandler(async (req, res) => {
-    const { content } = req.body
-    const { videoId, postId } = req.params // Support both video and community posts
+    const { content, parentCommentId } = req.body; // parentCommentId for replies
+    const { videoId, postId } = req.params;
 
-    if (!content) throw new ApiError(400, "Comment content is required")
+    if (!content?.trim()) throw new ApiError(400, "Comment content is required");
 
     const commentData = {
         content,
         owner: req.user._id,
-    }
+    };
 
-    // Determine if commenting on Video or Community Post
-    let parentModel;
+    let ParentModel;
     let parentId;
 
+    // 1. Identify where this comment belongs (Video or Post)
     if (videoId) {
+        if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid Video ID");
         commentData.video = videoId;
-        parentModel = Video;
+        ParentModel = Video;
         parentId = videoId;
     } else if (postId) {
+        if (!isValidObjectId(postId)) throw new ApiError(400, "Invalid Post ID");
         commentData.post = postId;
-        parentModel = Community;
+        ParentModel = Post; // Matches your export const Post
         parentId = postId;
     } else {
         throw new ApiError(400, "Video or Post ID is required");
     }
 
-    const comment = await Comment.create(commentData)
+    // 2. Handle Replies (if it's a nested comment)
+    if (parentCommentId) {
+        if (!isValidObjectId(parentCommentId)) throw new ApiError(400, "Invalid Parent Comment ID");
+        commentData.parentComment = parentCommentId;
+    }
 
-    // Update Manual Counter in the parent document
-    await parentModel.findByIdAndUpdate(parentId, {
-        $inc: { commentsCount: 1 }
-    })
+    // 3. Create the comment
+    const comment = await Comment.create(commentData);
+
+    // 4. Update the Manual Counters (Atomic Operations)
+    const updateTasks = [];
+
+    // Increment commentsCount on the Video or Post
+    updateTasks.push(
+        ParentModel.findByIdAndUpdate(parentId, { $inc: { commentsCount: 1 } })
+    );
+
+    // If it's a reply, increment repliesCount on the parent comment
+    if (parentCommentId) {
+        updateTasks.push(
+            Comment.findByIdAndUpdate(parentCommentId, { $inc: { repliesCount: 1 } })
+        );
+    }
+
+    // Run updates in parallel for better performance
+    await Promise.all(updateTasks);
 
     return res
         .status(201)
-        .json(new ApiResponse(201, comment, "Comment added successfully"))
+        .json(new ApiResponse(201, comment, "Comment added successfully"));
 })
+
 
 const deleteComment = asyncHandler(async (req, res) => {
     const { commentId } = req.params
@@ -66,7 +89,7 @@ const deleteComment = asyncHandler(async (req, res) => {
     if (videoId) {
         await Video.findByIdAndUpdate(videoId, { $inc: { commentsCount: -1 } })
     } else if (postId) {
-        await Community.findByIdAndUpdate(postId, { $inc: { commentsCount: -1 } })
+        await Post.findByIdAndUpdate(postId, { $inc: { commentsCount: -1 } })
     }
 
     return res
@@ -74,56 +97,83 @@ const deleteComment = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, {}, "Comment deleted successfully"))
 })
 
-const getVideoComments = asyncHandler(async (req, res) => {
-    const { videoId } = req.params
-    const { page = 1, limit = 10 } = req.query
 
-    if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid video Id")
+const getComments = asyncHandler(async (req, res) => {
+    // 1. Get IDs from params and query
+    const { videoId, postId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+
+    // 2. Determine the filter based on what was provided in the URL
+    const filter = {};
+    if (videoId) {
+        if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid Video ID");
+        filter.video = new mongoose.Types.ObjectId(videoId);
+    } else if (postId) {
+        if (!isValidObjectId(postId)) throw new ApiError(400, "Invalid Post ID");
+        filter.post = new mongoose.Types.ObjectId(postId);
+    } else {
+        throw new ApiError(400, "Target ID (Video or Post) is required");
+    }
+
+    // 3. IMPORTANT: Only fetch top-level comments (not replies) by default
+    filter.parentComment = null;
 
     const aggregate = Comment.aggregate([
-        { $match: { video: new mongoose.Types.ObjectId(videoId) } },
+        { $match: filter },
+        // Join with User (Comment Author)
         {
             $lookup: {
                 from: "users",
                 localField: "owner",
                 foreignField: "_id",
-                as: "owner",
+                as: "author",
                 pipeline: [{ $project: { username: 1, avatar: 1, fullName: 1 } }]
             }
         },
+        // Join with Likes to check current user's status (isLiked/isDisliked)
         {
-            // Optional: check if the logged-in user liked each comment
             $lookup: {
                 from: "likes",
-                localField: "_id",
-                foreignField: "comment",
-                as: "likes"
+                let: { commentId: "$_id" },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $and: [
+                                    { $eq: ["$targetId", "$$commentId"] },
+                                    { $eq: ["$likedBy", new mongoose.Types.ObjectId(req.user?._id)] }
+                                ]
+                            }
+                        }
+                    }
+                ],
+                as: "userInteraction"
             }
         },
         {
             $addFields: {
-                owner: { $first: "$owner" },
-                // Note: since we have manual counters in schema, we use them
-                // but we check isLiked for the current user here
-                isLiked: {
-                    $in: [req.user?._id, "$likes.likedBy"]
-                }
+                author: { $first: "$author" },
+                // Use the Manual Counters from your Schema!
+                likes: "$likesCount",
+                dislikes: "$dislikesCount",
+                replies: "$repliesCount", 
+                isLiked: { $eq: [{ $first: "$userInteraction.type" }, "like"] },
+                isDisliked: { $eq: [{ $first: "$userInteraction.type" }, "dislike"] }
             }
         },
-        { $project: { likes: 0 } }
-    ])
+        { $project: { userInteraction: 0 } },
+        { $sort: { createdAt: -1 } }
+    ]);
 
-    const paginatedComments = await Comment.aggregatePaginate(aggregate, { 
+    const result = await Comment.aggregatePaginate(aggregate, { 
         page: Number(page), 
         limit: Number(limit) 
     });
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, paginatedComments, "Comments fetched successfully"))
-})
+    return res.status(200).json(new ApiResponse(200, result, "Comments fetched successfully"));
+});
 
-// updateComment remains mostly the same, but ensure owner check is robust
+
 const updateComment = asyncHandler(async (req, res) => {
     const { commentId } = req.params
     const { content } = req.body
@@ -150,7 +200,7 @@ const updateComment = asyncHandler(async (req, res) => {
 })
 
 export {
-    getVideoComments,
+    getComments,
     addComment,
     updateComment,
     deleteComment

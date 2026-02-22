@@ -6,10 +6,17 @@ import { ApiResponse } from "../utils/ApiResponse.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
 
 const toggleSubscription = asyncHandler(async (req, res) => {
-    const { channelId } = req.params
+    const { username } = req.params
+    if (!username?.trim()) {
+        throw new ApiError(400, "Username is required");
+    }
 
-    if (!isValidObjectId(channelId)) throw new ApiError(400, "invalid channel id")
+    const user = await User.findOne({ username });
+    if (!user) {
+        throw new ApiError(404, "Channel/User not found");
+    }
 
+    const channelId = user._id;
     // Use _id for consistency
     const subscription = await Subscription.findOne({
         subscriber: req.user?._id,
@@ -33,43 +40,39 @@ const toggleSubscription = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, { subscribed: true }, "subscription added"))
 })
 
-const getUserChannelSubscribers = asyncHandler(async (req, res) => {
-    const { channelId } = req.params
-    if (!isValidObjectId(channelId)) throw new ApiError(400, "invalid channel id")
+const getSubscribersCount = asyncHandler(async (req, res) => {
+    const { username } = req.params
+    if (!username?.trim()) {
+        throw new ApiError(400, "Username is required");
+    }
 
-    const channelSubscribers = await Subscription.aggregate([
-        { $match: { channel: new mongoose.Types.ObjectId(channelId) } },
-        {
-            $lookup: {
-                from: "users",
-                localField: "subscriber",
-                foreignField: "_id",
-                as: "subscriber",
-                pipeline: [{ $project: { username: 1, fullName: 1, avatar: 1 } }]
-            }
-        },
-        { $unwind: "$subscriber" },
-        { $project: { subscriber: 1, createdAt: 1 } }
-    ])
+    const user = await User.findOne({ username });
+    if (!user) {
+        throw new ApiError(404, "Channel not found");
+    }
+
+    const channelId = user._id;
+
+    const channelSubscribers = await Subscription.countDocuments({
+        channel: channelId
+    });
 
     return res
         .status(200)
-        .json(new ApiResponse(200, channelSubscribers, "subscribers fetched successfully."))
+        .json(new ApiResponse(200, channelSubscribers, "Subscribers fetched successfully."))
 })
 
 const getSubscribedChannels = asyncHandler(async (req, res) => {
-    const { subscriberId } = req.params
-    if (!isValidObjectId(subscriberId)) throw new ApiError(400, "invalid subscriber id")
 
     const subscribedChannels = await Subscription.aggregate([
-        { $match: { subscriber: new mongoose.Types.ObjectId(subscriberId) } },
+        { $match: { subscriber: new mongoose.Types.ObjectId(req.user?._id) } },
         {
             $lookup: {
                 from: "users",
                 localField: "channel",
                 foreignField: "_id",
                 as: "channelDetails",
-                pipeline: [{ $project: { username: 1, fullName: 1, avatar: 1 } }]
+                pipeline: [{ $project: { username: 1, fullName: 1, avatar: 1, description: 1 } }]
             }
         },
         { $unwind: "$channelDetails" },
@@ -78,14 +81,19 @@ const getSubscribedChannels = asyncHandler(async (req, res) => {
         {
             $lookup: {
                 from: "subscriptions",
-                localField: "channel", // The ID of the channel we are looking at
-                foreignField: "channel", // Look for this ID in the 'channel' field of other subscription docs
-                as: "allSubscribers"
+                let: { channelId: "$channel" },
+                pipeline: [
+                    { $match: { $expr: { $eq: ["$channel", "$$channelId"] } } },
+                    { $count: "count" }
+                ],
+                as: "subscriberData"
             }
         },
         {
             $addFields: {
-                subscriberCount: { $size: { $subcribers } }
+                subscriberCount: {
+                    $ifNull: [{ $arrayElemAt: ["$subscriberData.count", 0] }, 0]
+                }
             }
         },
         {
@@ -119,7 +127,7 @@ const getSubscribedFeed = asyncHandler(async (req, res) => {
         { $unwind: "$videos" },
         { $replaceRoot: { newRoot: "$video" } },
         {
-            $lookup:{
+            $lookup: {
                 from: 'users',
                 localField: 'owner',
                 foreignField: '_id',
@@ -139,7 +147,7 @@ const getSubscribedFeed = asyncHandler(async (req, res) => {
 
 export {
     toggleSubscription,
-    getUserChannelSubscribers,
+    getSubscribersCount,
     getSubscribedChannels,
     getSubscribedFeed
 }

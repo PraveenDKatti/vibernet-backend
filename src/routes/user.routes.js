@@ -9,7 +9,7 @@ import {
     registerUser, 
     updateAccountDetails, 
     updateUserAvatar, 
-    updateUserCoverImage 
+    updateUserCover 
 } from "../controllers/user.controller.js"
 import { upload } from "../middlewares/multer.middleware.js"
 import { verifyJWT } from "../middlewares/auth.middleware.js"
@@ -23,7 +23,7 @@ router.route("/register").post(
             maxCount:1
         },
         {
-            name:"coverImage",
+            name:"cover",
             maxCount:1
         }
     ]),
@@ -40,7 +40,7 @@ router.route("/current-user").get(verifyJWT, getCurrentUser)
 router.route("/update-account").patch(verifyJWT, updateAccountDetails)
 
 router.route("/avatar").patch(verifyJWT, upload.single("avatar"), updateUserAvatar)
-router.route("/cover-image").patch(verifyJWT, upload.single("coverImage"), updateUserCoverImage)
+router.route("/cover").patch(verifyJWT, upload.single("cover"), updateUserCover)
 
 router.route("/:username").get(verifyJWT, getUserChannelProfile)
 

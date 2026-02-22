@@ -48,7 +48,7 @@ const userSchema = new Schema(
       required: true
     },
 
-    coverImage: {
+    cover: {
       type: String
     },
 

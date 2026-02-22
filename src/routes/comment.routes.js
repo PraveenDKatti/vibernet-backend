@@ -2,14 +2,15 @@ import { Router } from "express";
 import { 
     addComment, 
     deleteComment, 
-    getVideoComments, 
+    getComments, 
     updateComment 
 } from "../controllers/comment.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js"
 
 const router = Router()
 
-router.route("/v/:videoId").get(getVideoComments)
+router.route("/v/:videoId").get(getComments);
+router.route("/p/:postId").get(getComments);
 
 router.use(verifyJWT)
 router.route("/v/:videoId").post(addComment)
