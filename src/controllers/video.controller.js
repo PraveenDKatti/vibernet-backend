@@ -15,7 +15,7 @@ const getAllVideos = asyncHandler(async (req, res) => {
 
     const pipeline = [];
 
-    const userId = ""
+    let userId = ""
     if (username) {
         const user = await User.findOne({ username })
         if (!user) {

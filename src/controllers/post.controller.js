@@ -1,4 +1,5 @@
 import mongoose, { isValidObjectId } from "mongoose";
+import { User } from '../models/user.model.js';
 import { Post } from "../models/post.model.js";
 import { Comment } from '../models/comment.model.js'
 import { Like } from '../models/like.model.js'
@@ -48,6 +49,8 @@ const createPost = asyncHandler(async (req, res) => {
         }
         postData.images = imageFiles;
     }
+    
+    console.log(postData)
 
     // 3. Create and return
     const post = await Post.create(postData);
@@ -63,11 +66,18 @@ const createPost = asyncHandler(async (req, res) => {
 
 
 const getChannelPosts = asyncHandler(async (req, res) => {
-    const { userId } = req.params;
-    if (!isValidObjectId(userId)) throw new ApiError(400, "Invalid User Id");
+    const { username } = req.params;
+    if (!username?.trim()) {
+        throw new ApiError(400, "username is missing");
+    }
+
+    const user = await User.findOne({username})
+    const channelId = user._id
+
+    if (!isValidObjectId(channelId)) throw new ApiError(400, "Invalid User Id");
 
     const posts = await Post.aggregate([
-        { $match: { owner: new mongoose.Types.ObjectId(userId) } },
+        { $match: { owner: new mongoose.Types.ObjectId(channelId) } },
         {
             $lookup: {
                 from: "likes",

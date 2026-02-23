@@ -10,7 +10,7 @@ import {
 const router = Router();
 
 // Public routes
-router.route("/user/:username").get(getChannelPosts);
+router.route("/:username").get(getChannelPosts);
 
 // Protected routes (require login)
 router.use(verifyJWT); 
