@@ -49,8 +49,6 @@ const createPost = asyncHandler(async (req, res) => {
         }
         postData.images = imageFiles;
     }
-    
-    console.log(postData)
 
     // 3. Create and return
     const post = await Post.create(postData);
