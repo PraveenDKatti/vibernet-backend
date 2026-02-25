@@ -62,7 +62,7 @@ const postSchema = new Schema(
 
 /* ---------------- POLL VALIDATION ONLY ---------------- */
 
-postSchema.pre("validate", function (next) {
+postSchema.pre("validate", function () {
   if (this.type === "poll") {
     if (!this.poll?.question) {
       return next(new Error("Poll must contain a question"));
@@ -72,8 +72,7 @@ postSchema.pre("validate", function (next) {
       return next(new Error("Poll must have at least 2 options"));
     }
   }
-
-  next();
+  
 });
 
 postSchema.index({ type: 1, createdAt: -1 });

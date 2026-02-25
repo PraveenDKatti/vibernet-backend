@@ -6,6 +6,7 @@ import {
     updatePost, 
     deletePost 
 } from "../controllers/post.controller.js";
+import {upload} from '../middlewares/multer.middleware.js'
 
 const router = Router();
 
@@ -15,7 +16,7 @@ router.route("/:username").get(getChannelPosts);
 // Protected routes (require login)
 router.use(verifyJWT); 
 
-router.route("/").post(createPost);
+router.route("/").post(upload.fields([ { name:"images",maxCount:4 }]), createPost);
 router.route("/:postId")
     .patch(updatePost)
     .delete(deletePost);

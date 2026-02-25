@@ -6,11 +6,11 @@ import { Like } from '../models/like.model.js'
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { uploadMultipleOnCloudinary } from '../utils/cloudinary.js'
 
 
 const createPost = asyncHandler(async (req, res) => {
     const { content, type, poll, videoId } = req.body;
-    const ownerId = req.user?._id;
 
     // 1. Basic validation
     if (!type || !["text", "image", "video", "poll"].includes(type)) {
@@ -20,7 +20,7 @@ const createPost = asyncHandler(async (req, res) => {
     const postData = {
         content,
         type,
-        owner: ownerId,
+        owner:req.user?._id
     };
 
     // 2. Handle specific types
@@ -43,11 +43,15 @@ const createPost = asyncHandler(async (req, res) => {
 
     // Note: 'images' would typically come from req.files (Multer/Cloudinary)
     if (type === "image") {
-        const imageFiles = req.files?.images?.map(file => file.path);
+        const imageFiles = req.files?.images;
         if (!imageFiles || imageFiles.length === 0) {
-            throw new ApiError(400, "Images are required for an image post");
+            throw new ApiError(400, "Images are required");
         }
-        postData.images = imageFiles;
+
+        const filePaths = imageFiles.map(file => file.path);
+        const uploadedImages = await uploadMultipleOnCloudinary(filePaths);
+
+        postData.images = uploadedImages.map(img => img.url);
     }
 
     // 3. Create and return
@@ -69,13 +73,23 @@ const getChannelPosts = asyncHandler(async (req, res) => {
         throw new ApiError(400, "username is missing");
     }
 
-    const user = await User.findOne({username})
+    const user = await User.findOne({ username })
     const channelId = user._id
 
     if (!isValidObjectId(channelId)) throw new ApiError(400, "Invalid User Id");
 
     const posts = await Post.aggregate([
         { $match: { owner: new mongoose.Types.ObjectId(channelId) } },
+        {
+            $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "owner",
+                pipeline: [{ $project: { username: 1, avatar: 1, fullName: 1 } }]
+            }
+        },
+        { $addFields: { owner: { $first: "$owner" } } },
         {
             $lookup: {
                 from: "likes",
@@ -100,7 +114,7 @@ const getChannelPosts = asyncHandler(async (req, res) => {
                 // Mapping your Schema's manual fields to the response
                 totalLikes: "$likesCount",
                 totalDislikes: "$dislikesCount",
-                totalComments: "$commentsCount", 
+                totalComments: "$commentsCount",
                 isLiked: { $eq: [{ $first: "$userInteraction.type" }, "like"] },
                 isDisliked: { $eq: [{ $first: "$userInteraction.type" }, "dislike"] }
             }
