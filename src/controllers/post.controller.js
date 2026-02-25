@@ -20,7 +20,7 @@ const createPost = asyncHandler(async (req, res) => {
     const postData = {
         content,
         type,
-        owner:req.user?._id
+        owner: req.user?._id
     };
 
     // 2. Handle specific types
@@ -90,6 +90,18 @@ const getChannelPosts = asyncHandler(async (req, res) => {
             }
         },
         { $addFields: { owner: { $first: "$owner" } } },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "video",
+                foreignField: "_id",
+                as: "video",
+                pipeline: [
+                    { $project: { videoFile: 1, thumbnail: 1, title: 1, duration: 1 } }
+                ]
+            }
+        },
+        { $addFields: { video: { $first: "$video" } } },
         {
             $lookup: {
                 from: "likes",
