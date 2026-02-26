@@ -10,12 +10,12 @@ import {
 } from "../controllers/playlist.controller.js";
 import {verifyJWT} from "../middlewares/auth.middleware.js"
 
-
 const router = Router()
-router.route("/:username").get(getUserPlaylists)
+router.get("/user/:username", getUserPlaylists)
 router.use(verifyJWT)
 
 router.route("/").post(createPlaylist)
+router.route("/").get(getUserPlaylists)
 router.route("/:playlistId").get(getPlaylistById)
 router.route("/:playlistId/add/:videoId").patch(addVideoToPlaylist)
 router.route("/:playlistId/remove/:videoId").patch(removeVideoFromPlaylist)

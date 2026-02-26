@@ -26,21 +26,26 @@ const createPlaylist = asyncHandler(async (req, res) => {
 
 const getUserPlaylists = asyncHandler(async (req, res) => {
     //TODO: get user playlists
+    
     const { username } = req.params
-    if (!username?.trim()) {
-        throw new ApiError(400, "Username is required");
+    let channelId = ""
+
+    if (username) {
+        const user = await User.findOne({ username });
+        console.log("channelfound");
+        
+        if (!user) {
+            throw new ApiError(404, "Channel not found");
+        }
+        channelId = user._id
+    }else{
+        channelId = req.user._id
     }
 
-    const user = await User.findOne({ username });
-    if (!user) {
-        throw new ApiError(404, "Channel not found");
-    }
+    if (!isValidObjectId(channelId)) throw new ApiError(400, "Invalid User Id")
 
-    const channelId = user._id;
-    if(!isValidObjectId(channelId)) throw new ApiError(400, "Invalid User Id")
-
-    const playlists = await Playlist.find({owner: channelId})
-    if (!playlists) throw new ApiError(404, "No playlist found") 
+    const playlists =  await Playlist.find({ owner: channelId })
+    if (!playlists) throw new ApiError(404, "No playlist found")
 
     return res
         .status(200)
@@ -50,8 +55,8 @@ const getUserPlaylists = asyncHandler(async (req, res) => {
 const getPlaylistById = asyncHandler(async (req, res) => {
     //TODO: get playlist by id
     const { playlistId } = req.params
-    if(!isValidObjectId(playlistId)) throw new ApiError(400, "Invalid Playlist Id")
-    
+    if (!isValidObjectId(playlistId)) throw new ApiError(400, "Invalid Playlist Id")
+
     const playlist = await Playlist.findById(playlistId)
 
     return res
@@ -63,11 +68,11 @@ const getPlaylistById = asyncHandler(async (req, res) => {
 const addVideoToPlaylist = asyncHandler(async (req, res) => {
     const { playlistId, videoId } = req.params
 
-    if(!isValidObjectId(playlistId) && !isValidObjectId(videoId)) throw new ApiError(400, "Invalid playlist or video id") 
+    if (!isValidObjectId(playlistId) && !isValidObjectId(videoId)) throw new ApiError(400, "Invalid playlist or video id")
 
     const playlist = await Playlist.findByIdAndUpdate(
         playlistId,
-        { $addToSet: {videos: videoId} },
+        { $addToSet: { videos: videoId } },
         { new: true }
     )
 
@@ -80,8 +85,8 @@ const addVideoToPlaylist = asyncHandler(async (req, res) => {
 const removeVideoFromPlaylist = asyncHandler(async (req, res) => {
     const { playlistId, videoId } = req.params
     // TODO: remove video from playlist
-    if(!isValidObjectId(playlistId) && !isValidObjectId(videoId)) throw new ApiError(400, "Invalid playlist or video id") 
-    
+    if (!isValidObjectId(playlistId) && !isValidObjectId(videoId)) throw new ApiError(400, "Invalid playlist or video id")
+
     const playlist = await Playlist.findByIdAndUpdate(
         playlistId,
         { $pull: { video: videoId } },
@@ -98,7 +103,7 @@ const removeVideoFromPlaylist = asyncHandler(async (req, res) => {
 const deletePlaylist = asyncHandler(async (req, res) => {
     const { playlistId } = req.params
     // TODO: delete playlist
-    if(!isValidObjectId(playlistId)) throw new ApiError(400, "Invalid playlist Id")
+    if (!isValidObjectId(playlistId)) throw new ApiError(400, "Invalid playlist Id")
     await Playlist.findByIdAndDelete(playlistId)
 
     return res
@@ -110,18 +115,18 @@ const updatePlaylist = asyncHandler(async (req, res) => {
     const { playlistId } = req.params
     const { name, description } = req.body
     //TODO: update playlist
-    if(!isValidObjectId(playlistId)) throw new ApiError(400, "Invalid playlist Id")
+    if (!isValidObjectId(playlistId)) throw new ApiError(400, "Invalid playlist Id")
 
     const playlist = await Playlist.findById(playlistId)
-    if(!playlist) throw new ApiError(404, "Playlist Not Found")
+    if (!playlist) throw new ApiError(404, "Playlist Not Found")
 
     if (name) { playlist.name = name }
     if (description) { playlist.description = description }
     await playlist.save()
 
     return res
-    .status(200)
-    .json(new ApiResponse(200, playlist, "updated playlist successfully."))
+        .status(200)
+        .json(new ApiResponse(200, playlist, "updated playlist successfully."))
 
 })
 
