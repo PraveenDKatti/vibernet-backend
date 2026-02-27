@@ -111,6 +111,7 @@ const getSubscribedChannels = asyncHandler(async (req, res) => {
 })
 
 const getSubscribedFeed = asyncHandler(async (req, res) => {
+    
     const { page = 1, limit = 10 } = req.query;
 
     const aggregate = Subscription.aggregate([
@@ -125,7 +126,7 @@ const getSubscribedFeed = asyncHandler(async (req, res) => {
             }
         },
         { $unwind: "$videos" },
-        { $replaceRoot: { newRoot: "$video" } },
+        { $replaceRoot: { newRoot: "$videos" } },
         {
             $lookup: {
                 from: 'users',

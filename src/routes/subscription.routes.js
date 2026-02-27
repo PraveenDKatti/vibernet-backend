@@ -9,11 +9,10 @@ import {
 
 
 const router = Router()
-router.route("/:username").get(getSubscribersCount)
-router.use(verifyJWT)
 
-router.route("/profile/subscriptions").get(getSubscribedFeed);
-router.route("/:username").post(toggleSubscription)
-router.route("/profile/channels").get(getSubscribedChannels)
+router.route("/feed").get(verifyJWT, getSubscribedFeed);
+router.route("/profile/channels").get(verifyJWT, getSubscribedChannels);
+router.route("/:username").get(getSubscribersCount)
+router.route("/:username").post(verifyJWT, toggleSubscription)
 
 export default router
