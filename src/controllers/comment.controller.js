@@ -7,8 +7,8 @@ import { ApiResponse } from "../utils/ApiResponse.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
 
 const addComment = asyncHandler(async (req, res) => {
-    const { content, parentCommentId } = req.body; // parentCommentId for replies
-    const { videoId, postId } = req.params;
+    const { content, parentCommentId, postId } = req.body;
+    const { videoId } = req.params;
 
     if (!content?.trim()) throw new ApiError(400, "Comment content is required");
 
@@ -126,10 +126,11 @@ const getComments = asyncHandler(async (req, res) => {
                 from: "users",
                 localField: "owner",
                 foreignField: "_id",
-                as: "author",
+                as: "owner",
                 pipeline: [{ $project: { username: 1, avatar: 1, fullName: 1 } }]
             }
         },
+        { $addFields: { owner: { $first: "$owner" } } },
         // Join with Likes to check current user's status (isLiked/isDisliked)
         {
             $lookup: {
@@ -152,11 +153,9 @@ const getComments = asyncHandler(async (req, res) => {
         },
         {
             $addFields: {
-                author: { $first: "$author" },
-                // Use the Manual Counters from your Schema!
-                likes: "$likesCount",
-                dislikes: "$dislikesCount",
-                replies: "$repliesCount", 
+                likesCount: "$likesCount",
+                dislikesCount: "$dislikesCount",
+                repliesCount: "$repliesCount",
                 isLiked: { $eq: [{ $first: "$userInteraction.type" }, "like"] },
                 isDisliked: { $eq: [{ $first: "$userInteraction.type" }, "dislike"] }
             }
@@ -165,9 +164,9 @@ const getComments = asyncHandler(async (req, res) => {
         { $sort: { createdAt: -1 } }
     ]);
 
-    const result = await Comment.aggregatePaginate(aggregate, { 
-        page: Number(page), 
-        limit: Number(limit) 
+    const result = await Comment.aggregatePaginate(aggregate, {
+        page: Number(page),
+        limit: Number(limit)
     });
 
     return res.status(200).json(new ApiResponse(200, result, "Comments fetched successfully"));
@@ -183,7 +182,7 @@ const updateComment = asyncHandler(async (req, res) => {
 
     const comment = await Comment.findById(commentId)
     if (!comment) throw new ApiError(404, "Comment not found")
-    
+
     if (comment.owner.toString() !== req.user?._id.toString()) {
         throw new ApiError(403, "Unauthorized access")
     }

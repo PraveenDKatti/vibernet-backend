@@ -124,13 +124,13 @@ const getChannelPosts = asyncHandler(async (req, res) => {
         {
             $addFields: {
                 // Mapping your Schema's manual fields to the response
-                totalLikes: "$likesCount",
-                totalDislikes: "$dislikesCount",
-                totalComments: "$commentsCount",
+                likesCount: "$likesCount",
+                dislikesCount: "$dislikesCount",
+                commentsCount: "$commentsCount",
                 isLiked: { $eq: [{ $first: "$userInteraction.type" }, "like"] },
                 isDisliked: { $eq: [{ $first: "$userInteraction.type" }, "dislike"] }
             }
-        },
+        }, 
         { $project: { userInteraction: 0 } },
         { $sort: { createdAt: -1 } }
     ]);
