@@ -2,6 +2,7 @@ import mongoose, { isValidObjectId } from "mongoose"
 import { User } from "../models/user.model.js"
 import { ApiError } from "../utils/ApiError.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
+import { Subscription } from "../models/subscription.model.js"
 import { Video } from "../models/video.model.js"
 import { Comment } from '../models/comment.model.js'
 import { Like } from "../models/like.model.js"
@@ -104,6 +105,15 @@ const getVideoById = asyncHandler(async (req, res) => {
     const { videoId } = req.params;
     if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid ID");
 
+    const videoDoc = await Video.findById(videoId).select("owner")
+
+    const isSubscribed = req.user?._id
+        ? await Subscription.exists({
+            channel: videoDoc.owner,
+            subscriber: req.user._id
+        })
+        : null;
+
     const video = await Video.aggregate([
         { $match: { _id: new mongoose.Types.ObjectId(videoId) } },
         {
@@ -112,8 +122,8 @@ const getVideoById = asyncHandler(async (req, res) => {
                 localField: 'owner',
                 foreignField: '_id',
                 as: 'owner',
-                pipeline: [{ $project: { fullName: 1, username: 1, avatar: 1 } }]
-            }
+                pipeline: [{ $project: { fullName: 1, username: 1, avatar: 1, isSubscribed: isSubscribed } }]
+            },
         },
         { $addFields: { owner: { $first: "$owner" } } },
         {
