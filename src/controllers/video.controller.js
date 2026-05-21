@@ -108,11 +108,11 @@ const getVideoById = asyncHandler(async (req, res) => {
     const videoDoc = await Video.findById(videoId).select("owner")
 
     const isSubscribed = req.user?._id
-        ? await Subscription.exists({
+        ? !!(await Subscription.exists({
             channel: videoDoc.owner,
             subscriber: req.user._id
-        })
-        : null;
+        }))
+        : false;
 
     const video = await Video.aggregate([
         { $match: { _id: new mongoose.Types.ObjectId(videoId) } },
@@ -122,7 +122,7 @@ const getVideoById = asyncHandler(async (req, res) => {
                 localField: 'owner',
                 foreignField: '_id',
                 as: 'owner',
-                pipeline: [{ $project: { fullName: 1, username: 1, avatar: 1, isSubscribed: isSubscribed } }]
+                pipeline: [{ $project: { fullName: 1, username: 1, avatar: 1, isSubscribed: { $literal: isSubscribed } } }]
             },
         },
         { $addFields: { owner: { $first: "$owner" } } },

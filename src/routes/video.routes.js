@@ -1,18 +1,18 @@
 import { Router } from "express";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { verifyJWT, optionalVerifyJWT } from "../middlewares/auth.middleware.js";
 import { 
     togglePublishStatus, 
     deleteVideo, 
     getAllVideos, 
     getVideoById, 
     publishAVideo, 
-    updateVideo 
+    updateVideo,
 } from "../controllers/video.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 
 const router = Router()
 router.route("/").get(getAllVideos);
-router.route("/:videoId").get( getVideoById )
+router.route("/:videoId").get( optionalVerifyJWT, getVideoById )
 
 router.use(verifyJWT)
 
