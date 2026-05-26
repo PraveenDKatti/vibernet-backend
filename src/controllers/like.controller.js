@@ -63,14 +63,14 @@ const getLikedVideos = asyncHandler(async (req, res) => {
         {
             $match: {
                 likedBy: new mongoose.Types.ObjectId(req.user._id),
-                video: { $exists: true },
+                targetType: "video",
                 type: "like"
             }
         },
         {
             $lookup: {
                 from: "videos",
-                localField: "video",
+                localField: "targetId",
                 foreignField: "_id",
                 as: "video",
                 pipeline: [
