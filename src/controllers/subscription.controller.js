@@ -112,22 +112,30 @@ const getSubscribedChannels = asyncHandler(async (req, res) => {
 
 const getSubscribedFeed = asyncHandler(async (req, res) => {
     
-    const { page = 1, limit = 10 } = req.query;
-
-    const aggregate = Subscription.aggregate([
-        { $match: { subscriber: new mongoose.Types.ObjectId(req.user?._id) } },
+    const feed = await Subscription.aggregate([
+        { 
+            $match: { subscriber: new mongoose.Types.ObjectId(req.user._id) } 
+        },
         {
             $lookup: {
                 from: "videos",
                 localField: "channel",
                 foreignField: "owner",
                 as: "videos",
-                pipeline: [{ $match: { isPublished: true } }],
+                pipeline: [
+                    { $match: { isPublished: true } },
+                    {
+                        $project: {
+                            thumbnail: 1, title: 1, videoFile: 1, duration: 1, views: 1, createdAt: 1, owner: 1
+                        }
+                    }
+                ],
             }
         },
         { $unwind: "$videos" },
-        { $replaceRoot: { newRoot: "$videos" } },
+        { $replaceRoot: { newRoot: "$videos" } }, 
         {
+            // Fetches details of the channel creator/owner
             $lookup: {
                 from: 'users',
                 localField: 'owner',
@@ -136,12 +144,9 @@ const getSubscribedFeed = asyncHandler(async (req, res) => {
                 pipeline: [{ $project: { username: 1, fullName: 1, avatar: 1 } }]
             }
         },
-        { $unwind: "$ownerDetails" },
-        { $sort: { createdAt: -1 } }
+        { $unwind: "$ownerDetails" }, 
+        { $sort: { createdAt: -1 } } 
     ]);
-
-    // Using the aggregatePaginate plugin correctly here
-    const feed = await Video.aggregatePaginate(aggregate, { page, limit });
 
     return res.status(200).json(new ApiResponse(200, feed, "Feed fetched successfully"));
 });
