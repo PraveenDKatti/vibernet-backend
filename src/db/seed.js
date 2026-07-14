@@ -48,7 +48,7 @@ const seedData = async () => {
         thumbnail: faker.image.url({ width: 640, height: 480 }),
         title: faker.lorem.sentence(),
         description: faker.lorem.paragraph(),
-        duration: faker.number.int({ min: 60, max: 600 }),
+        duration: faker.number.int({ min: 10, max: 10000 }),
         views: faker.number.int({ min: 0, max: 10000 }),
         isPublished: true,
         owner: randomOwner._id,
