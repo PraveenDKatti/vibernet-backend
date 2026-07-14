@@ -32,7 +32,7 @@ const seedData = async () => {
         email: faker.internet.email().toLowerCase(),
         fullName: faker.person.fullName(),
         avatar: faker.image.avatar(),
-        coverImage: faker.image.urlPicsumPhotos(),
+        cover: faker.image.urlPicsumPhotos(),
         subscribers: faker.number.int({ min: 10, max: 10000000 }),
         password: hashedPassword, // pre-save hook may hash
       });
