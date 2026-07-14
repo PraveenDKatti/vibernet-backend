@@ -50,7 +50,7 @@ const seedData = async () => {
         title: faker.lorem.sentence(),
         description: faker.lorem.paragraph(),
         duration: faker.number.int({ min: 10, max: 10000 }),
-        views: faker.number.int({ min: 0, max: 10000 }),
+        views: faker.number.int({ min: 10, max: 10000000 }),
         isPublished: true,
         owner: randomOwner._id,
       });
