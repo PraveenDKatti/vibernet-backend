@@ -26,13 +26,14 @@ const seedData = async () => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash("password123", salt);
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 50; i++) {
       users.push({
         username: faker.internet.username().toLowerCase(),
         email: faker.internet.email().toLowerCase(),
         fullName: faker.person.fullName(),
         avatar: faker.image.avatar(),
         coverImage: faker.image.urlPicsumPhotos(),
+        subscribers: faker.number.int({ min: 10, max: 10000000 }),
         password: hashedPassword, // pre-save hook may hash
       });
     }
@@ -41,7 +42,7 @@ const seedData = async () => {
     // 3. Create Dummy Videos
     console.log("Seeding videos...");
     const videos = [];
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 200; i++) {
       const randomOwner = createdUsers[Math.floor(Math.random() * createdUsers.length)];
       videos.push({
         videoFile: "https://res.cloudinary.com/demo/video/upload/dog.mp4",
@@ -59,7 +60,7 @@ const seedData = async () => {
     // 4. Create Mixed Posts (text, video, image, poll)
     console.log("Seeding posts...");
     const posts = [];
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 300; i++) {
       const randomOwner = createdUsers[Math.floor(Math.random() * createdUsers.length)];
 
       // Random type
