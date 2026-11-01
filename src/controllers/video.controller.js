@@ -10,7 +10,7 @@ import { ApiResponse } from "../utils/ApiResponse.js"
 import { uploadOnCloudinary } from "../utils/cloudinary.js"
 
 const getAllVideos = asyncHandler(async (req, res) => {
-    const { page = 1, limit = 10, query, sortBy, sortType, username } = req.query;
+    const { page = 1, limit = 16, query, sortBy, sortType, username, lastId, lastDate } = req.query;
     const pageNumber = Number(page);
     const limitNumber = Number(limit);
 
@@ -24,6 +24,17 @@ const getAllVideos = asyncHandler(async (req, res) => {
         } else {
             userId = user._id
         }
+    }
+
+    if (lastId && lastDate) {
+        pipeline.push({
+            $match: {
+                $or: [
+                    { createdAt: { $lt: new Date(lastDate) } },
+                    { createdAt: new Date(lastDate), _id: new mongoose.Types.ObjectId(lastId) } // 💡 Also make sure lastId is converted to an ObjectId if your _id is an ObjectId!
+                ]
+            }
+        });
     }
 
     if (query) {
@@ -59,9 +70,17 @@ const getAllVideos = asyncHandler(async (req, res) => {
     );
 
     const aggregate = Video.aggregate(pipeline);
-    const videos = await Video.aggregatePaginate(aggregate, { page: pageNumber, limit: limitNumber });
+    const videos = await Video.aggregatePaginate(aggregate, { page: pageNumber, limit: limitNumber + 1 });
 
-    return res.status(200).json(new ApiResponse(200, videos, "Fetched videos successfully"));
+    let hasMore = false;
+    if (videos.docs.length > limit) {
+        hasMore = true;
+        videos.docs.pop(); // Remove the extra item from the result set
+    }
+
+    let nextCursor = videos.docs.length > 0 ? { lastId: videos.docs[videos.docs.length - 1]._id, lastDate: videos.docs[videos.docs.length - 1].createdAt } : null
+
+    return res.status(200).json(new ApiResponse(200, videos, "Fetched videos successfully", hasMore, nextCursor))
 });
 
 const publishAVideo = asyncHandler(async (req, res) => {
