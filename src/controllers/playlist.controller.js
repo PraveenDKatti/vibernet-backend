@@ -7,14 +7,15 @@ import { asyncHandler } from "../utils/asyncHandler.js"
 
 
 const createPlaylist = asyncHandler(async (req, res) => {
-    const { name, description } = req.body
+    const { name, visibility } = req.body
+    console.log(req.body)
 
     //TODO: create playlist
-    if (!(name || !description)) throw new ApiError(401, "all fields required")
+    if (!(name || !visibility)) throw new ApiError(401, "all fields required")
 
     const playlist = await Playlist.create({
         name,
-        description,
+        visibility,
         owner: req.user._id,
         videos: []
     })
@@ -113,7 +114,7 @@ const deletePlaylist = asyncHandler(async (req, res) => {
 
 const updatePlaylist = asyncHandler(async (req, res) => {
     const { playlistId } = req.params
-    const { name, description } = req.body
+    const { name, visibility } = req.body
     //TODO: update playlist
     if (!isValidObjectId(playlistId)) throw new ApiError(400, "Invalid playlist Id")
 
@@ -121,7 +122,7 @@ const updatePlaylist = asyncHandler(async (req, res) => {
     if (!playlist) throw new ApiError(404, "Playlist Not Found")
 
     if (name) { playlist.name = name }
-    if (description) { playlist.description = description }
+    if (visibility) { playlist.visibility = visibility }
     await playlist.save()
 
     return res
