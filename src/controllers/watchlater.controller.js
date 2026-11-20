@@ -5,7 +5,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 // 1. TOGGLE WATCH LATER (Add if missing, Remove if exists)
-const AddToWatchLater = asyncHandler(async (req, res) => {
+const addToWatchLater = asyncHandler(async (req, res) => {
     const { videoId } = req.params;
     if(!videoId) throw new ApiError("missing video Id")
     const newEntry = await WatchLater.create({ video: videoId, user: req.user?._id });
@@ -44,7 +44,7 @@ const getWatchLaterVideos = asyncHandler(async (req, res) => {
 });
 
 // 3. DELETE SINGLE ITEM (Manual Delete)
-const RemoveFromWatchLater = asyncHandler(async (req, res) => {
+const removeFromWatchLater = asyncHandler(async (req, res) => {
     const { videoId } = req.params;
     if(!videoId) throw new ApiError("missing video Id")
     await WatchLater.findOneAndDelete({ video: videoId, user: req.user?._id });
@@ -53,7 +53,7 @@ const RemoveFromWatchLater = asyncHandler(async (req, res) => {
 
 
 export {
-    AddToWatchLater,
+    addToWatchLater,
     getWatchLaterVideos,
-    RemoveFromWatchLater
+    removeFromWatchLater
 };
