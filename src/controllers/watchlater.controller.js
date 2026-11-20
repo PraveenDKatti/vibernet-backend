@@ -5,16 +5,9 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 // 1. TOGGLE WATCH LATER (Add if missing, Remove if exists)
-const toggleWatchLater = asyncHandler(async (req, res) => {
+const AddToWatchLater = asyncHandler(async (req, res) => {
     const { videoId } = req.params;
-
-    const existingEntry = await WatchLater.findOne({ video: videoId, user: req.user?._id });
-
-    if (existingEntry) {
-        await WatchLater.findByIdAndDelete(existingEntry._id);
-        return res.status(200).json(new ApiResponse(200, { isAdded: false }, "Removed from Watch Later"));
-    }
-
+    if(!videoId) throw new ApiError("missing video Id")
     const newEntry = await WatchLater.create({ video: videoId, user: req.user?._id });
     return res.status(201).json(new ApiResponse(201, { isAdded: true, data: newEntry }, "Added to Watch Later"));
 });
@@ -47,19 +40,20 @@ const getWatchLaterVideos = asyncHandler(async (req, res) => {
         { $addFields: { video: { $first: "$video" } } }
     ]);
 
-    return res.status(200).json(new ApiResponse(200, list, "Watch Later fetched"));
+    return res.status(200).json(new ApiResponse(200, list, "Fetched Watch Later feed"));
 });
 
 // 3. DELETE SINGLE ITEM (Manual Delete)
-const deleteFromWatchLater = asyncHandler(async (req, res) => {
+const RemoveFromWatchLater = asyncHandler(async (req, res) => {
     const { videoId } = req.params;
+    if(!videoId) throw new ApiError("missing video Id")
     await WatchLater.findOneAndDelete({ video: videoId, user: req.user?._id });
-    return res.status(200).json(new ApiResponse(200, {}, "Deleted from Watch Later"));
+    return res.status(200).json(new ApiResponse(200, {}, "Removed from Watch Later"));
 });
 
 
 export {
-    toggleWatchLater,
+    AddToWatchLater,
     getWatchLaterVideos,
-    deleteFromWatchLater
+    RemoveFromWatchLater
 };

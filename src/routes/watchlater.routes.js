@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { 
-    toggleWatchLater, 
+    AddToWatchLater, 
     getWatchLaterVideos, 
-    deleteFromWatchLater 
+    RemoveFromWatchLater 
 } from "../controllers/watchlater.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -15,7 +15,7 @@ router.route("/")
     .get(getWatchLaterVideos); // GET: /api/v1/watch-later
 
 router.route("/:videoId")
-    .post(toggleWatchLater)     // POST: /api/v1/watch-later/64f1... (Add/Remove)
-    .delete(deleteFromWatchLater); // DELETE: /api/v1/watch-later/64f1... (Hard Delete)
+    .post(AddToWatchLater)     // POST: /api/v1/watch-later/64f1... (Add)
+    .delete(RemoveFromWatchLater); // DELETE: /api/v1/watch-later/64f1... (Remove)
 
 export default router;
